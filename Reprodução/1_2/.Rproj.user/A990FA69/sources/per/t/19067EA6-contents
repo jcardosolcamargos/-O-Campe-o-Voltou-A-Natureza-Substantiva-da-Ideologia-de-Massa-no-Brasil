@@ -1,0 +1,410 @@
+---
+title: "Assignment I"
+author: 
+  - name: Joao Cardoso Lara Camargos
+    affiliation: Spring 2025
+    role: POLI 884
+date: today
+format: pdf
+---
+
+```{r, echo=FALSE, message=FALSE,warning=FALSE}
+library(tidyverse)
+```
+
+
+# Question 1
+a. *(0.5 point)* Prove that the following condition is sufficient for identifying the ATT:
+$$
+\begin{aligned}
+& D_i \perp \{Y_{i}(0)\}_{i=1}^N,\\
+& 1 - \varepsilon < P(D_i = 1) < \varepsilon.
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+& ATT = E[Y(1) - Y(0)\mid D=1] \\
+& ATT = E[Y(1)\mid D=1] - E[Y(0) \mid D=1]
+\end{aligned}
+$$
+
+Given that the Unconfoundednes Assumption is true ($D_i \perp \{Y_{i}(0)\}_{i=1}^N$), the distribution of $Y(0)$ is the same for treated and untreated groups. Therefore:
+
+$$E[Y(0)\mid D=1] = E[Y(0)\mid D=0]$$
+
+Then we can infer the unobservable outcome when the of $E[Y(0\mid D=1]$ using the observable outcome from the untreated $E[Y(0)\mid D=0]$, because:
+
+$$E[Y\mid D=0]=E[Y(0)\mid D=0]$$
+
+The Positivity Assumption ($1 - \varepsilon < P(D_i = 1) < \varepsilon$) assures that the probability of being treated is between 0 and 1, guarantying the existence of a comparable treated or untreated group, allowing for the estimation of $E[Y\mid D=0]$ and $E[\mid D=1$]. With a comparable group and an observance of $E[Y\mid D=0]$, we can indentify the ATT. 
+
+b. *(0.5 point)* Consider the assumption Imbens (2004) calls "weak ignorability:"
+$$
+\begin{aligned}
+& \mathbf{1}\{D_i = d\} \perp \{Y_{i}(d)\}_{i=1}^N,\\
+& 1 - \varepsilon < P(D_i = 1) < \varepsilon.
+\end{aligned}
+$$
+for $d = 0$ and $d = 1$. How does the assumption differ from the one we considered in class? Is it sufficient for the identification of the ATE? Why or Why not?   
+
+The week ignorability relax the Unconfoundednes Assumption, requiring only pair-wise independence and the independence of the treatment assign, rather than the treatment level. According to [Imbens (2000)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=226648), this is sufficient for the ATE estimation. The difference on the definition is more related on the conception of the causal inference as a missing data problem. There is no worry regarding the level of treatment when $D_i = 0$, just the absence of an observable $Y_i(1)$, and vice-versa.
+
+
+# Question 2
+a. *(1 point)* Simulate the following data generating process in R:   
+      1. Sample size $N = 100$.   
+      2. $X_i$ is drawn from the uniform distribution on $[0, 1]$.   
+      3. $Y_i(0)$ is a quadratic function of $X_i$: $Y_i(0) = 3 + 2*X_i + X_i^2 + \varepsilon_i$, where $\varepsilon_i \sim N(0, 1)$.   
+      4. The individualistic treatment effect $\tau_i$ is drawn from a normal distribution with the mean of $5*\sin(X_i)$ and the standard deviation of $1$.   
+      5. The treatment status $D_i$ equals $1$ with a probability of $0.4$ for all the units.
+
+```{r}
+set.seed(1234)
+
+# Creating sample
+
+N <- 100
+
+X <- runif(N)
+
+Y0 <- 3 + 2*X + X^2 + rnorm(N)
+
+t <- rnorm(N, 5*sin(X), 1)
+
+Y1 <- Y0 + t 
+
+D <- rbinom(N, 1, prob = .4)
+
+Y <- ifelse(D ==1, Y1, Y0)
+
+dat <- data.frame(X, Y0, Y1, D, Y)
+```
+
+
+b. *(0.5 point)* Calculate the ATE. 
+
+```{r}
+# Calculating the ATE
+ATE <- mean(dat$Y1) - mean(dat$Y0)
+
+ATE
+
+```
+
+c. *(0.5 point)* Plot how $E[Y_i(0) \mid X_i]$ and $E[Y_i(1) \mid X_i]$ vary over $X_i$ as curves. Distinguish them with different colors. Make sure that you have legends for each curve and labels on both the X- and Y-axis.
+
+```{r}
+# Ploting the graph
+G1 <- dat |>
+  ggplot(aes(x = X)) +
+  geom_smooth(aes(y = Y0, color = "E[Y0 | X]"), se = FALSE) +
+  geom_smooth(aes(y = Y1, color = "E[Y1 | X]"), se = FALSE) +
+  labs(
+    title = "E[Y0 | X] and E[Y1 | X] as Functions of X",
+    x = "X",
+    y = "Y",
+    color = ""
+  ) +
+  scale_color_manual(values = c( "darkred", "blue")) +
+  theme_bw() +
+  theme(legend.position = 'bottom')
+
+G1
+```
+
+
+d. *(0.5 point)* Add $Y_i$ from the treatment group and the control group to the same plot as points. Distinguish them by different colors. Make sure that you have legends for each type of points.
+
+```{r}
+G2 <- G1 +
+  geom_point(data = dat |> filter(D == 1), 
+             aes(y = Y, color = "Treatment Group"), alpha = 0.6) +
+  geom_point(data = dat |> filter(D == 0), 
+             aes(y = Y, color = "Control Group"), alpha = 0.6) +
+  scale_color_manual(values = c("red", "darkred", "blue", "lightblue")) +
+  theme(legend.position = "bottom")
+
+G2
+```
+
+
+e. *(1 point)* Reassign the treatment for $1,000$ times. In each round, record the estimate from the Horvitz-Thompson estimator in a vector and the estimated Neyman variance in a different vector. Show that the Horvitz-Thompson estimator is unbiased for the ATE and the Neyman variance estimator is conservative for the true variance. Plot the distribution of the estimates and its average against the ATE.
+
+```{r, warning=FALSE}
+set.seed(12345)
+# Reassign treatment 1,000 times
+B <- 1000
+HT_est <- numeric(B)
+Neyman_var <- numeric(B)
+
+for (b in 1:B) {
+  D_sim <- rbinom(N, 1, prob = 0.4)
+  HT_est[b] <-  (1/N *sum(Y1[D_sim == 1]/0.4) - 
+                        1/N *sum(Y0[D_sim == 0]/0.6))
+  Neyman_var[b] <- 1/(N* 0.4) * 
+    (sum(Y1[D_sim == 1]^2)/(N* 0.4)) +1/(N* 0.6) * 
+    (sum(Y0[D_sim == 0]^2)/(N* 0.6))
+}
+
+# Check unbiasedness and variance
+mean_HT <- mean(HT_est)
+true_var <- var(HT_est)
+mean_Neyman <- mean(Neyman_var)
+
+
+ggplot(data.frame(HT_est), aes(x = HT_est)) +
+  geom_density( color = "black", fill = "darkblue", alpha = 0.5) +
+  geom_vline(xintercept = mean_HT, color = "red", 
+             linetype = "dashed", size = 1) +
+  geom_vline(xintercept = ATE, color = "green", 
+             linetype = "dotted", size = 1) +
+  labs(
+    title = "Distribution of Horvitz-Thompson Estimates",
+    x = "Estimate",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+```
+
+Comparison between Neyman variance and the true variance. The Neyman variance is `r mean_Neyman` and the True variance is `r true_var`, so it's `r mean_Neyman >= true_var` that the Neyman variance is more conservative than the true variance, since it does not incorporate the Covariance decrease implicity in the true measure. 
+
+```{r}
+ggplot(data.frame(Neyman_var), aes(x = Neyman_var)) +
+  geom_density( color = "black", fill = "darkblue", alpha = 0.5) +
+  geom_vline(xintercept = mean_Neyman, color = "red", 
+             linetype = "dashed", size = 1) +
+  geom_vline(xintercept = true_var, color = "green", 
+             linetype = "dotted", size = 1) +
+  geom_text(x=.93,y=6, color = 'green', label = 'True variance')+
+  geom_text(x=1.07,y=6, color = 'red', label = 'Mean Neyman\nvariance')+
+  labs(
+    title = "Distribution of Neyman variance of Horvitz-Thompson Estimates",
+    x = "Estimate",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+```
+
+f. *(0.5 point)* Calculate the coverage rate of the $95\%$ confidence interval based on the Neyman variance estimator and critical values from the normal distribution.
+
+```{r}
+CI_lower <- HT_est - qnorm(0.975) * sqrt(Neyman_var)
+CI_upper <- HT_est + qnorm(0.975) * sqrt(Neyman_var)
+coverage_rate <- mean(CI_lower <= ATE & CI_upper >= ATE)
+
+coverage_rate
+```
+
+
+g. *(1 point)* In a given experiment, apply Fisher's randomization test (FRT) to construct the distribution of the estimates under the sharp null. Plot the distribution and its $97.5\%$ quantile against the estimated ATE. Can you reject the sharp null hypothesis? Is this consistent with your result in f?
+
+
+```{r}
+set.seed(1234)
+
+# Fisher's Randomization Test
+FRT_est <- numeric(B)
+
+for (b in 1:B) {
+  D_sim <- sample(D)  
+  FRT_est[b] <- mean(Y[D_sim == 1]) - mean(Y[D_sim == 0])
+}
+
+# Plot the distribution under sharp null
+data.frame(FRT_est) |> 
+  ggplot( aes(x = FRT_est)) +
+  geom_density(color = "black", fill = "darkblue", alpha = 0.5) +
+  geom_vline(xintercept = quantile(FRT_est, 0.975), color = "red", 
+             linetype = "dashed", size = 1) +
+  geom_vline(xintercept = ATE, color = "black", 
+             linetype = "dotted", size = 1) +
+  labs(
+    title = "Distribution of Estimates under Sharp Null (FRT)",
+    x = "Estimate",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+reject_null <- ATE > quantile(FRT_est, 0.975)
+reject_null
+```
+
+The results say that we should reject the null hypothesis under the sharp null, since the ATE is greater than the $0.975$ quantile of the Fisher Randomization Test, supporting the results obtained in previous sections.  
+
+# Question 3
+This exercise asks you to replicate the experimental results from Santoro and Broockman (2022) using what you have learned from class. In the experiment, the researchers invited subjects to have a video chat on an online platform with a partner from a different party. The theme of the conversation is what their perfect day would be like. The subjects were then randomly assigned into either the treatment group $D_i = 1$), in which they were informed that the partner would be an outpartisan, or the control group ($D_i = 0$), in which they received no extra information. We focus on one outcome in the experiment, post-treatment warmth toward outpartisans. You will be using the file "study1_cleaned.csv." Necessary steps to clean the data file have been provided to you in the R template.
+
+```{R app-ab, echo=FALSE}
+dat <- read.csv("study1_cleaned.csv")
+
+dat <- dat[is.na(dat$exclusion_posthoc) & is.na(dat$exclusion_preregistered), ] # drop subjects who are not qualified
+dat$began_convo <- is.na(dat$exclusion_didnothaveconvo) & !is.na(dat$post_therm_voter_outparty_rescaled) # create the response indicator
+# The outcome will be missing if the subject does not respond
+dat[, "condition"] <- as.numeric(dat[, "condition"] == "nonpoliticalaware") # recode the treatment indicator
+
+Y <- "post_therm_voter_outparty_rescaled"
+S <- "began_convo"
+D <- "condition"
+
+dat_complete <- dat[dat$began_convo == 1, c(Y, D, S)]
+
+names(dat_complete) <- c('Y', 'D', 'S' )
+```
+
+a. *(0.5 point)* Estimate the ATE using the Hajek estimator.
+
+```{r}
+N1 <- sum(dat_complete$D)
+
+H_est <- 1/N1 *sum(dat_complete |>  
+                     filter(D == 1) |> 
+                     pull(Y)) -
+  1/(nrow(dat_complete)-N1) * sum(dat_complete |>  
+                     filter(D == 0) |> 
+                     pull(Y))
+
+H_est
+```
+
+b. *(0.5 point)* Calculate the Neyman variance estimate for the Hajek estimator.
+
+```{r}
+Neyman_H <- var(dat_complete |>  
+                     filter(D == 1) |> 
+                     pull(Y))/N1 +
+  var(dat_complete |>  
+                     filter(D == 0) |> 
+                     pull(Y))/(nrow(dat_complete)-N1)
+
+Neyman_H
+```
+
+
+c. *(0.5 point)* Apply FRT to construct the $95\%$ confidence interval under the sharp null. Plot the distribution of the estimates.
+
+```{r}
+set.seed(1234)
+
+# Fisher's Randomization Test
+FRT_est <- numeric(B)
+
+for (b in 1:B) {
+  dat_complete$D_sim <- sample(dat_complete$D)
+  FRT_est[b] <- mean(dat_complete |> 
+                       filter(D_sim ==1) |> 
+                       pull(Y)) -
+    mean(dat_complete |> 
+                       filter(D_sim ==0) |> 
+                       pull(Y))
+}
+
+
+# Plot the distribution under sharp null
+data.frame(FRT_est) |> 
+  ggplot( aes(x = FRT_est)) +
+  geom_density(color = "black", fill = "darkblue", alpha = 0.5) +
+  geom_vline(xintercept = quantile(FRT_est, 0.975), color = "red", 
+             linetype = "dashed", size = 1) +
+  geom_vline(xintercept = H_est, color = "black", 
+             size = 1) +
+  geom_vline(xintercept = H_est + qnorm(.975)*sqrt(Neyman_H), color = "black", 
+             linetype = "dashed", size = 1) +
+  geom_vline(xintercept = H_est - qnorm(.975)*sqrt(Neyman_H), color = "black", 
+             linetype = "dashed", size = 1) +
+  labs(
+    title = "Distribution of Estimates under Sharp Null (FRT)",
+    x = "Estimate",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+```
+
+d. *(1 point)* Apply both the percentile-t and Efron methods to derive the $95\%$ confidence interval for the estimate from the Hajek estimator. Compare their length with the one obtained from the analytic approach. Are your estimates statically significant at the level of $5\%$?
+
+```{r}
+set.seed(12345)
+
+te_reg_est <- coefficients(lm(dat_complete$Y ~ dat_complete$D))[2]
+N_boots <- 1000
+N <- nrow(dat_complete)
+te_reg_ests_boot <- rep(NA, N_boots)
+
+for (i in 1:N_boots){
+  boot_indicator <- sample(1:nrow(dat_complete), N, replace = 1)
+  Y_boot <- dat_complete$Y[boot_indicator]
+  D_boot <- dat_complete$D[boot_indicator]
+  te_reg_ests_boot[i] <- coefficients(lm(Y_boot ~ D_boot))[2]
+}
+
+# The Efron method for bootstrap
+CI_Efron <- quantile(te_reg_ests_boot, c(0.025, 0.975))
+
+# The percentile t-method
+se_boot <- sqrt(var(te_reg_ests_boot))
+t_boot <- (te_reg_ests_boot - te_reg_est)/se_boot
+CI_perct <- te_reg_est - se_boot * quantile(t_boot, c(0.975, 0.025))
+
+# Neyman analytical solution
+cat("95% CI from the Efron method:", round(CI_Efron, 3), "\n",
+    "95% CI from the percentile t-method:", round(CI_perct, 3), "\n",
+    "95% CI from the analytical solution:", 
+    round(c(H_est - sqrt(Neyman_H)* qnorm(.975),H_est + 
+              sqrt(Neyman_H)* qnorm(.975)), 3), "\n")
+```
+
+Using all the approachs, our results have statistical significance for confidence level of $95\%$.
+
+e. *(0.5 point)* Draw a coefficient plot with the three $95\%$ confidence intervals.
+
+```{r}
+tibble(
+  type = factor(c('Neyman Variance', 'Efron method', 't-method')),
+  order = c(1,2,3),
+  HA = H_est,
+  min = c(H_est - sqrt(Neyman_H)* qnorm(.975), CI_perct[1], CI_Efron[1]),
+  max = c(H_est + sqrt(Neyman_H)* qnorm(.975), CI_perct[2], CI_Efron[2]),
+) |> 
+  ggplot(aes(x = HA, y = fct_reorder(type, -order)))+
+  geom_point()+
+  geom_errorbarh(aes(xmin = min, xmax = max))+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  labs(x='Estimate', y = '')+
+  theme_bw()
+```
+
+
+f. *(1 point)* A big challenge to this study is the presence of missing data. What is the average response rate in the study? In the original data ($dat$), estimate the ATE on the response indicator $S$ with the Hajek estimator and construct a $95\%$ confidence interval. Is the estimate significant at the level of $5\%$? Based on the results, discuss whether your previous findings might be influenced by the missing data.
+
+```{r}
+comp_HA <- mean(dat |> filter(condition == 1) |> pull(began_convo)) -
+  mean(dat |> filter(condition == 0) |> pull(began_convo)) 
+
+com_HAvar <- var(dat |> filter(condition == 1) |> pull(began_convo))/
+  nrow(dat |> filter(condition == 1)) + 
+  var(dat |> filter(condition == 0) |> pull(began_convo))/
+  nrow(dat |> filter(condition == 0))
+
+cat("Estimated ATE on response rate: ", comp_HA,"\n",
+    "Confidence Intervals: ", 
+    comp_HA - qnorm(.975)* sqrt(com_HAvar), 
+    comp_HA + qnorm(.975)* sqrt(com_HAvar))
+
+data.frame(
+  type = 'ATE - Response',
+  ate = comp_HA,
+  min = comp_HA - qnorm(.975)* sqrt(com_HAvar),
+  max = comp_HA + qnorm(.975)* sqrt(com_HAvar)
+) |> 
+  ggplot(aes(x = ate, y = type))+
+  geom_point()+
+  geom_errorbarh(aes(xmin = min, xmax = max))+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  labs(x='Estimate', y = '')+
+  theme_bw()
+```
+
+The results show that the treatment does not have an effect on the propensity to response with a $95\%$. Given those results, we cannot infer that our estimates were biased by an effect of the treatment on the response rates.
+

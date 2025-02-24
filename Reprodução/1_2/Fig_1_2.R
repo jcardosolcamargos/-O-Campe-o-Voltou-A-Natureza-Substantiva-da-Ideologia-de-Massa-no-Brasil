@@ -1,0 +1,789 @@
+## ==========================================
+## 
+## Figura 1 e 2
+## 
+## ==========================================
+
+set.seed(124232)
+
+pacman::p_load(tidyverse, janitor, rio, srvyr,
+               caret, rsample, vip, modeldata,
+               ranger, h2o, randomForest, 
+               gmodels, ConfusionTableR, 
+               labelled)
+
+
+# Carregando base de dados ----------
+
+eseb_2002 <- import("base_eseb_2002.sav") %>% 
+  clean_names() %>% 
+  select(ideol_pt = p41av1, ideol_psdb = p41cv1, 
+         ideol = p50v1, peso_nac, voto = p07, aval = p18, partido = p36a) %>% 
+  mutate(part_esq = ifelse(partido %in% c(13, 65, 
+                                          12, 16, 43,
+                                          40), 1, 0))%>% 
+  mutate(voto = ifelse(voto >= 5, NA, voto)) %>% 
+  mutate(voto = ifelse(voto %in% c(1,2), 1, 0)) %>% 
+  mutate(ideol_pt = ifelse(ideol_pt >= 11, NA, ideol_pt),
+         ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_psdb = ifelse(ideol_psdb >= 11, NA, ideol_psdb),
+         ideol_psdb = ifelse(ideol_psdb >= 7, 1, 0)) %>% 
+  mutate(ideol = ifelse(ideol >= 11, NA, ideol)) |> 
+  mutate(aval = ifelse(aval > 10, NA, aval)) |> 
+  mutate(ano = 2002)  
+
+
+eseb_2006 <- import("base_eseb_2006.sav") %>% 
+  clean_names() %>% 
+  select(ideol_pt = eseb17a, ideol_psdb = eseb17c, 
+         ideol = eseb19, voto = eseb25, aval = eseb6, partido = eseb12a) %>% 
+  mutate(part_esq = ifelse(partido %in% c(13, 16, 12, 
+                                          43, 40, 
+                                          65), 1, 0)) %>% 
+  mutate(voto = ifelse(voto>= 8, NA, voto)) %>% 
+  mutate(voto = ifelse(voto %in% c(1,3,4), 1, 0)) %>% 
+  mutate(ideol_pt = ifelse(ideol_pt >= 11, NA, ideol_pt),
+         ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_psdb = ifelse(ideol_psdb >= 11, NA, ideol_psdb),
+         ideol_psdb = ifelse(ideol_psdb >= 7, 1, 0)) %>% 
+  mutate(ideol = ifelse(ideol >= 11, NA, ideol))  |>
+  mutate(aval = ifelse(aval > 10, NA, aval)) |>  
+  mutate(ano = 2006)  
+
+eseb_2010 <- import("base_eseb_2010.sav") %>% 
+  clean_names() %>% 
+  select(ideol_pt = v66, ideol_psdb = v68, ideol = v79, 
+         voto = v86, aval = v39, partido = v41) %>% 
+  mutate(voto = ifelse(voto >= 10, NA, voto)) %>% 
+  mutate(ideol_pt = ifelse(ideol_pt >= 11, NA, ideol_pt),
+         ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_psdb = ifelse(ideol_psdb >= 11, NA, ideol_psdb),
+         ideol_psdb = ifelse(ideol_psdb >= 4, 1, 0)) %>% 
+  mutate(ideol = ifelse(ideol >= 11, NA, ideol))  |> 
+  mutate(part_esq = ifelse(partido %in% c(4, 3, 6, 7, 14,
+                                          17, 18, 22, 26), 1,0)) |> 
+  mutate(ano = 2010) %>% 
+  mutate(aval = ifelse(aval > 10, NA, aval)) |> 
+  mutate(voto = ifelse(voto == 1, 1,0))
+
+
+eseb_2014 <- import("base_eseb_2014.sav") %>% 
+  clean_names() %>% 
+  select(ideol_pt = q11a, ideol_psdb = q11e, 
+         fpond, ideol = q12, voto = q5p1b, aval = pc2, partido = q16b) %>% 
+  mutate(voto = ifelse(voto >= 50, NA, voto)) %>% 
+  mutate(voto = ifelse(voto %in% c(2,4,6,7,8,10,11),1,0)) %>% 
+  mutate(ideol_pt = ifelse(ideol_pt >= 95, NA, ideol_pt),
+         ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_psdb = ifelse(ideol_psdb >= 95, NA, ideol_psdb),
+         ideol_psdb = ifelse(ideol_psdb >= 7, 1, 0))  %>% 
+  mutate(ideol = ifelse(ideol >= 95, NA, ideol))  |> 
+  mutate(aval = ifelse(aval > 10, NA, aval)) |> 
+  mutate(part_esq = ifelse(partido %in% c(25, 2, 3, 4, 
+                                          5, 17, 22, 24, 30), 1,0)) |> 
+  mutate(ano = 2014)  
+
+
+eseb_2018 <- import("base_eseb_2018.sav") %>% 
+  clean_names() %>% 
+  select(ideol_pt = q1701, ideol_psl = q1712, ideol = q18, voto = q12p1_b, 
+         aval = q9, partido = q10b) %>% 
+  mutate(voto = ifelse(voto >= 50, NA, voto)) %>% 
+  mutate(voto = ifelse(voto %in% c(3,5,7,12,14), 1, 0)) %>% 
+  mutate(ideol_pt = ifelse(ideol_pt >= 95, NA, ideol_pt),
+         ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_psl = ifelse(ideol_psl >= 95, NA, ideol_psl),
+         ideol_psl = ifelse(ideol_psl >= 7, 1, 0)) %>% 
+  mutate(ideol = ifelse(ideol >= 95, NA, ideol))  |> 
+  mutate(aval = ifelse(aval > 10, NA, aval)) |> 
+  mutate(part_esq = ifelse(partido %in% c(13, 21, 65, 29, 
+                                          12, 40, 50, 16,
+                                          43), 1,0)) |> 
+  mutate(ano = 2018) 
+
+eseb_2022 <- import("base_eseb_2022.sav") %>% 
+  clean_names()%>% 
+  select(ideol = q19, voto = q10p1b, ideol_pt = q18_5,
+         ideol_pl = q18_2, maipen = q31_1, 
+         casagay = q31_2, adogay = q31_3,
+         penmor = q31_4, drogas = q31_5, 
+         armas = q31_6, aborto = q31_7, 
+         aborto2 = q31_8, cotas = q31_9, 
+         privat = q31_10, bolsa = q31_12,
+         auxilio = q31_13, partido_pt = q16_5,
+         peso, 
+         aval = q08, partido = q23c) %>% 
+  mutate(ideol = ifelse(ideol >= 95, NA, ideol)) %>% 
+  mutate(voto = ifelse(voto >= 50, NA, voto)) %>% 
+  mutate(voto = ifelse(voto %in% c(2,3,4,7,10), 0, 1)) %>% 
+  mutate(voto = as.factor(voto)) %>% 
+  mutate(partido_pt = ifelse(partido_pt >= 96, NA, partido_pt)) |> 
+  mutate(part_esq = ifelse(partido %in% c(4, 3, 6, 7, 
+                                          13, 16, 17, 
+                                          20, 23,31), 1,0)) |> 
+  mutate(aval = ifelse(aval > 10, NA, aval)) |> 
+  mutate(ano = 2022)  
+
+# Posicionamento ideological e Acerto nos partidos
+
+ideol_2002 <- eseb_2002 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2002) %>% 
+  filter(ideol_na == 0)
+
+correto_2002 <-eseb_2002 %>%  
+  as_survey_design(weights = peso_nac) %>%
+  mutate(total = ifelse(ideol_pt == 1 & ideol_psdb == 1,
+                        1, 0 )) %>%
+  summarise(total = survey_mean(total, na.rm = T)) %>% 
+  mutate(ano = 2002)
+
+ideol_2006 <- eseb_2006 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2006) %>% 
+  filter(ideol_na == 0)
+
+correto_2006 <- eseb_2006 %>%  
+  as_survey_design() %>%
+  mutate(total = ifelse(ideol_pt == 1 & ideol_psdb == 1,
+                        1, 0 )) %>%
+  summarise(total = survey_mean(total, na.rm = T)) %>% 
+  mutate(ano = 2006)
+
+ideol_2010 <- eseb_2010 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2010) %>% 
+  filter(ideol_na == 0)
+
+correto_2010 <- eseb_2010 %>%  
+  as_survey_design() %>%
+  mutate(total = ifelse(ideol_pt == 1 & ideol_psdb == 1,
+                        1, 0 )) %>%
+  summarise(total = survey_mean(total, na.rm = T)) %>% 
+  mutate(ano = 2010)
+
+ideol_2014 <- eseb_2014 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2014) %>% 
+  filter(ideol_na == 0)
+
+correto_2014 <- eseb_2014 %>% 
+  as_survey_design(weights = fpond) %>% 
+  mutate(total = ifelse(ideol_pt == 1 & ideol_psdb == 1,
+                        1, 0 )) %>% 
+  summarise(total = survey_mean(total, na.rm = T)) %>% 
+  mutate(ano = 2014)
+
+ideol_2018 <- eseb_2018 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2018) %>% 
+  filter(ideol_na == 0)  
+
+correto_2018 <- eseb_2018 %>% 
+  as_survey_design() %>% 
+  mutate(total = ifelse(ideol_pt == 1 & ideol_psl == 1,
+                        1, 0 )) %>% 
+  summarise(total = survey_mean(total, na.rm = T)) %>% 
+  mutate(ano = 2018)
+
+
+
+ideol_2022 <- eseb_2022 %>% 
+  mutate(ideol_na = ifelse(is.na(ideol), 1, 0)) %>% 
+  tabyl(ideol_na) %>% 
+  mutate(ano = 2022) %>% 
+  filter(ideol_na == 0)  
+
+correto_2022 <- eseb_2022 %>% 
+  mutate(ideol_pt = ifelse(ideol_pt <= 3, 1, 0),
+         ideol_pl = ifelse(ideol_pl >= 7, 1, 0))%>% 
+  as_survey_design(weights = peso) %>% 
+  mutate(total = ifelse(ideol_pt == 1 & ideol_pl == 1,
+                        1, 0 )) %>% 
+  summarise(total = survey_mean(total)) %>% 
+  mutate(ano = 2022)
+
+# Unindo dataframes
+
+corretos <- bind_rows(correto_2002, correto_2006, 
+                      correto_2010, correto_2014, 
+                      correto_2018, correto_2022) |> 
+  mutate(cat = "Partidos corretos")
+
+
+simbolicas <- bind_rows(ideol_2002, ideol_2006, 
+                        ideol_2010, ideol_2014, 
+                        ideol_2018, ideol_2022)|> 
+  mutate(cat = "Autoposicionamento",
+         n_t = c(length(eseb_2002$ideol),length(eseb_2006$ideol),length(eseb_2010$ideol),
+                 length(eseb_2014$ideol),length(eseb_2018$ideol),length(eseb_2022$ideol)))
+
+ggplot() +
+  geom_line(data = corretos, aes(x = ano, y = total*100, linetype = "Partidos corretamente identificados")) +
+  geom_linerange(data = corretos, aes(x = ano, ymax = (total + 1.96 * total_se)*100,
+                                      ymin = (total - 1.96 * total_se)*100, linetype = "Partidos corretamente identificados")) +
+  geom_line(data = simbolicas, aes(x = ano, y = percent*100, linetype = "Não resposta")) +
+  geom_linerange(data = simbolicas, aes(x = ano, ymax = (percent + 1.96 * sqrt(percent * (1 - percent) / n_t))*100,
+                                        ymin = (percent - 1.96 * sqrt(percent * (1 - percent) / n_t))*100, linetype = "Não resposta")) +
+  scale_linetype_manual(name = element_blank(), values = c("solid", "dashed"),
+                        labels = c("Autoposicionamento", "Identificação dos Partidos")) +
+  theme_bw() +
+  labs(x = "Ano", y = "Proporção") +
+  scale_x_continuous(breaks =   c(2002, 2006, 2010, 2014, 2018, 2022))+
+  guides(linetype = guide_legend())+
+  theme(legend.position = 'bottom')
+
+ggsave('Figura_1.png', unit = 'px', height = 1200, width = 1800)
+
+# Preparar dados para ML ------------------------------
+
+eseb_2002c <- eseb_2002 %>% 
+  mutate(voto = as.factor(voto)) %>% 
+  drop_na(voto)
+
+eseb_2006c <- eseb_2006 %>% 
+  mutate(voto = as.factor(voto)) %>% 
+  drop_na(voto)
+
+eseb_2010c <- eseb_2010 %>% 
+  mutate(voto = as.factor(voto)) %>% 
+  drop_na(voto)
+
+eseb_2014c <- eseb_2014 %>%
+  mutate(voto = as.factor(voto)) %>% 
+  drop_na(voto)
+
+eseb_2018c <- eseb_2018 %>% 
+  mutate(voto = as.factor(voto)) %>% 
+  drop_na(voto)
+
+eseb_2022c <- eseb_2022 
+
+# RF: Ideologia -------------------------------
+
+eseb_2002cid <- eseb_2002 %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2002.split <- initial_split(eseb_2002cid, prop = .7)
+m2002.train <- training(m2002.split)
+m2002.test <- testing(m2002.split)
+
+c2002.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2002.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2002.model.ideol, m2002.test)
+
+glimpse(m2002.train)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2002.test$voto)
+
+cm2002 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2002, 
+         type = "Ideologia")
+
+
+## eseb 2006
+
+eseb_2006cid <- eseb_2006c %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as_factor(voto))
+
+m2006.split <- initial_split(eseb_2006cid, prop = .7)
+m2006.train <- training(m2006.split)
+m2006.test <- testing(m2006.split)
+
+c2006.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2006.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2006.model.ideol, m2006.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2006.test$voto)
+
+cm2006 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2006, 
+         type = "Ideologia")
+
+## eseb 2010
+
+eseb_2010cid <- eseb_2010 %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2010.split <- initial_split(eseb_2010cid, prop = .7)
+m2010.train <- training(m2010.split)
+m2010.test <- testing(m2010.split)
+
+c2010.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2010.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2010.model.ideol, m2010.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2010.test$voto)
+
+cm2010 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2010, 
+         type = "Ideologia")
+
+## eseb 2014
+
+eseb_2014cid <- eseb_2014 %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2014.split <- initial_split(eseb_2014cid, prop = .7)
+m2014.train <- training(m2014.split)
+m2014.test <- testing(m2014.split)
+
+c2014.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2014.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2014.model.ideol, m2014.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2014.test$voto)
+
+cm2014 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2014, 
+         type = "Ideologia")
+
+## eseb 2018
+
+eseb_2018cid <- eseb_2018 %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2018.split <- initial_split(eseb_2018cid, prop = .7)
+m2018.train <- training(m2018.split)
+m2018.test <- testing(m2018.split)
+
+c2018.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2018.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2018.model.ideol, m2018.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2018.test$voto)
+
+cm2018 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2018, 
+         type = "Ideologia")
+
+## eseb 2022
+
+eseb_2022cid <- eseb_2022c %>% 
+  select(voto, ideol) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2022.split <- initial_split(eseb_2022cid, prop = .7)
+m2022.train <- training(m2022.split)
+m2022.test <- testing(m2022.split)
+
+c2022.model.ideol <- train(
+  voto ~ ideol, 
+  data = m2022.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2022.model.ideol, m2022.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2022.test$voto)
+
+cm2022 <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2022, 
+         type = "Ideologia")
+
+
+# RF: Partido -------------------------------
+
+eseb_2002cpart <- eseb_2002 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2002.split <- initial_split(eseb_2002cpart, prop = .7)
+m2002.train <- training(m2002.split)
+m2002.test <- testing(m2002.split)
+
+c2002.model.part <- train(
+  voto ~ part_esq, 
+  data = m2002.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2002.model.part, m2002.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2002.test$voto)
+
+cm2002part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2002, 
+         type = "Partido")
+
+
+eseb_2006cpart <- eseb_2006 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2006.split <- initial_split(eseb_2006cpart, prop = .7)
+m2006.train <- training(m2006.split)
+m2006.test <- testing(m2006.split)
+
+c2006.model.part <- train(
+  voto ~ part_esq, 
+  data = m2006.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2006.model.part, m2006.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2006.test$voto)
+
+cm2006part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2006, 
+         type = "Partido")
+
+eseb_2010cpart <- eseb_2010 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+eseb_2010cpart <- eseb_2010 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2010.split <- initial_split(eseb_2010cpart, prop = .7)
+m2010.train <- training(m2010.split)
+m2010.test <- testing(m2010.split)
+
+c2010.model.part <- train(
+  voto ~ part_esq, 
+  data = m2010.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2010.model.part, m2010.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2010.test$voto)
+
+cm2010part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2010, 
+         type = "Partido")
+
+
+eseb_2014cpart <- eseb_2014 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2014.split <- initial_split(eseb_2014cpart, prop = .7)
+m2014.train <- training(m2014.split)
+m2014.test <- testing(m2014.split)
+
+c2014.model.part <- train(
+  voto ~ part_esq, 
+  data = m2014.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2014.model.part, m2014.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2014.test$voto)
+
+cm2014part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2014, 
+         type = "Partido")
+
+
+eseb_2018cpart <- eseb_2018 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2018.split <- initial_split(eseb_2018cpart, prop = .7)
+m2018.train <- training(m2018.split)
+m2018.test <- testing(m2018.split)
+
+c2018.model.part <- train(
+  voto ~ part_esq, 
+  data = m2018.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2018.model.part, m2018.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2018.test$voto)
+
+cm2018part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2018,
+         type = "Partido")
+
+
+
+eseb_2022cpart <- eseb_2022 %>% 
+  select(voto, part_esq) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2022.split <- initial_split(eseb_2022cpart, prop = .7)
+m2022.train <- training(m2022.split)
+m2022.test <- testing(m2022.split)
+
+c2022.model.part <- train(
+  voto ~ part_esq, 
+  data = m2022.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2022.model.part, m2022.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2022.test$voto)
+
+cm2022part <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2022, 
+         type = "Partido")
+
+# RF: Avaliação -------------------------------
+
+eseb_2002caval <- eseb_2002 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2002.split <- initial_split(eseb_2002caval, prop = .7)
+m2002.train <- training(m2002.split)
+m2002.test <- testing(m2002.split)
+
+c2002.model.aval <- train(
+  voto ~ aval, 
+  data = m2002.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2002.model.aval, m2002.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2002.test$voto)
+
+cm2002aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2002, 
+         type = "Avaliação de Governo")
+
+
+eseb_2006caval <- eseb_2006 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2006.split <- initial_split(eseb_2006caval, prop = .7)
+m2006.train <- training(m2006.split)
+m2006.test <- testing(m2006.split)
+
+c2006.model.aval <- train(
+  voto ~ aval, 
+  data = m2006.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2006.model.aval, m2006.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2006.test$voto)
+
+cm2006aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2006, 
+         type = "Avaliação de Governo")
+
+eseb_2010caval <- eseb_2010 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+eseb_2010caval <- eseb_2010 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2010.split <- initial_split(eseb_2010caval, prop = .7)
+m2010.train <- training(m2010.split)
+m2010.test <- testing(m2010.split)
+
+c2010.model.aval <- train(
+  voto ~ aval, 
+  data = m2010.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2010.model.aval, m2010.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2010.test$voto)
+
+cm2010aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2010, 
+         type = "Avaliação de Governo")
+
+
+eseb_2014caval <- eseb_2014 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2014.split <- initial_split(eseb_2014caval, prop = .7)
+m2014.train <- training(m2014.split)
+m2014.test <- testing(m2014.split)
+
+c2014.model.aval <- train(
+  voto ~ aval, 
+  data = m2014.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2014.model.aval, m2014.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2014.test$voto)
+
+cm2014aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2014, 
+         type = "Avaliação de Governo")
+
+
+eseb_2018caval <- eseb_2018 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2018.split <- initial_split(eseb_2018caval, prop = .7)
+m2018.train <- training(m2018.split)
+m2018.test <- testing(m2018.split)
+
+c2018.model.aval <- train(
+  voto ~ aval, 
+  data = m2018.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2018.model.aval, m2018.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2018.test$voto)
+
+cm2018aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2018,
+         type = "Avaliação de Governo")
+
+
+
+eseb_2022caval<- eseb_2022 %>% 
+  select(voto, aval) %>% 
+  drop_na() %>% 
+  mutate(voto = as.factor(voto))
+
+m2022.split <- initial_split(eseb_2022caval, prop = .7)
+m2022.train <- training(m2022.split)
+m2022.test <- testing(m2022.split)
+
+c2022.model.aval <- train(
+  voto ~ aval, 
+  data = m2022.train, 
+  method = "rf"
+)
+
+pred_class <- predict(c2022.model.aval, m2022.test)
+
+cm <- confusionMatrix(data = relevel(pred_class, ref = 1),
+                      reference = m2022.test$voto)
+
+cm2022aval <- cm$overall %>% 
+  t() %>% data.frame() %>% 
+  mutate(ano = 2022, 
+         type = "Avaliação de Governo")
+
+total <- bind_rows(cm2002, cm2006, cm2010, 
+          cm2014, cm2018, cm2022,
+          cm2002part, cm2006part, cm2010part, 
+          cm2014part, cm2018part, cm2022part,
+          cm2022aval, cm2018aval,
+          cm2014aval, cm2010aval,
+          cm2006aval, cm2002aval) %>% 
+  select(ano, type, Accuracy, AccuracyLower, AccuracyUpper)
+
+
+total |> 
+  mutate(type = ifelse(type == "Partido", "Id. Partidária   ", type)) %>% 
+  mutate(type = ifelse(type == "Avaliação", "Aval. Governo    ", type)) %>% 
+  mutate(type = as.factor(type)) %>% 
+  mutate(type = fct_relevel(type, c("Aval. Governo    ","Id. Partidária   ", "Ideologia"))) %>% 
+  ggplot(aes(x = ano, y = Accuracy, color = type))+
+  geom_pointrange(aes(ymin = AccuracyLower, 
+                      ymax = AccuracyUpper),
+                  position = position_dodge(width=2)) +
+  theme_light() +
+  scale_x_continuous(breaks = c(2002, 2006, 2010, 2014, 
+                                2018, 2022)) +
+  scale_y_continuous(limits = c(0.4, 0.87)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  theme(legend.position = "bottom", 
+        legend.title = element_blank(),
+        text = element_text(size = 14)) + 
+  labs(x = "", y = '') +
+  scale_color_manual(values = c("grey56", "black", "grey"))
+
+
+ggsave('Figura_2.png', dpi = 300,units = 'px', width = 1600, height = 1000)
+
